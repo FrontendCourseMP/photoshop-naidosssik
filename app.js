@@ -86,6 +86,85 @@ async function loadStandardImage(file) {
   renderImageData(imageData);
 }
 
+function decodeGB7(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+
+  if (bytes.length < 12) {
+    throw new Error("Файл слишком короткий для формата GB7.");
+  }
+
+  if (
+    bytes[0] !== 0x47 ||
+    bytes[1] !== 0x42 ||
+    bytes[2] !== 0x37 ||
+    bytes[3] !== 0x1d
+  ) {
+    throw new Error("Неверная сигнатура GB7.");
+  }
+
+  const version = bytes[4];
+
+  if (version !== 0x01) {
+    throw new Error(`Неподдерживаемая версия GB7: ${version}`);
+  }
+
+  const flags = bytes[5];
+  const hasMask = (flags & 0b00000001) !== 0;
+
+  if ((flags & 0b11111110) !== 0) {
+    throw new Error("Некорректные флаги GB7.");
+  }
+
+  const width = (bytes[6] << 8) | bytes[7];
+  const height = (bytes[8] << 8) | bytes[9];
+
+  const pixelCount = width * height;
+  const expectedLength = 12 + pixelCount;
+
+  if (bytes.length !== expectedLength) {
+    throw new Error(
+      `Некорректный размер файла. Ожидалось ${expectedLength} байт, получено ${bytes.length}.`
+    );
+  }
+
+  const rgba = new Uint8ClampedArray(pixelCount * 4);
+
+  for (let i = 0; i < pixelCount; i++) {
+    const byte = bytes[12 + i];
+
+    const gray7 = byte & 0b01111111;
+    const maskBit = (byte & 0b10000000) >>> 7;
+
+    const gray8 = Math.round((gray7 / 127) * 255);
+
+    const index = i * 4;
+
+    rgba[index] = gray8;
+    rgba[index + 1] = gray8;
+    rgba[index + 2] = gray8;
+    rgba[index + 3] = hasMask ? (maskBit === 1 ? 255 : 0) : 255;
+  }
+
+  return {
+    imageData: new ImageData(rgba, width, height),
+    width,
+    height,
+    hasMask,
+  };
+}
+
+async function loadGB7(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const result = decodeGB7(arrayBuffer);
+
+  state.fileName = file.name;
+  state.format = "GB7";
+  state.colorDepth = result.hasMask ? "7 бит Gray + 1 бит mask" : "7 бит Gray";
+  state.hasMask = result.hasMask;
+
+  renderImageData(result.imageData);
+}
+
 fileInput.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
 
@@ -96,14 +175,16 @@ fileInput.addEventListener("change", async (event) => {
   try {
     const lowerName = file.name.toLowerCase();
 
-    if (
+    if (lowerName.endsWith(".gb7")) {
+      await loadGB7(file);
+    } else if (
       lowerName.endsWith(".png") ||
       lowerName.endsWith(".jpg") ||
       lowerName.endsWith(".jpeg")
     ) {
       await loadStandardImage(file);
     } else {
-      alert("Пока поддерживаются только PNG, JPG и JPEG.");
+      alert("Поддерживаются только PNG, JPG, JPEG и GB7.");
     }
   } catch (error) {
     console.error(error);
