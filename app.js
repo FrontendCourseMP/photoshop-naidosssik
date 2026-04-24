@@ -55,4 +55,62 @@ function renderImageData(imageData) {
   updateInfoPanel();
 }
 
+function hasAnyTransparency(imageData) {
+  const data = imageData.data;
+
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] !== 255) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function loadStandardImage(file) {
+  const bitmap = await createImageBitmap(file);
+
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  state.fileName = file.name;
+  state.format = file.type.includes("png") ? "PNG" : "JPG";
+  state.colorDepth = "24 бит / 32 бит RGBA";
+  state.hasMask = hasAnyTransparency(imageData);
+
+  renderImageData(imageData);
+}
+
+fileInput.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  try {
+    const lowerName = file.name.toLowerCase();
+
+    if (
+      lowerName.endsWith(".png") ||
+      lowerName.endsWith(".jpg") ||
+      lowerName.endsWith(".jpeg")
+    ) {
+      await loadStandardImage(file);
+    } else {
+      alert("Пока поддерживаются только PNG, JPG и JPEG.");
+    }
+  } catch (error) {
+    console.error(error);
+    alert(`Ошибка загрузки файла: ${error.message}`);
+  } finally {
+    fileInput.value = "";
+  }
+});
+
 updateInfoPanel();
