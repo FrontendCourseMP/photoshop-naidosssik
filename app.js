@@ -127,7 +127,6 @@ async function loadStandardImage(file) {
   state.hasMask = hasAnyTransparency(imageData);
 
   renderImageData(imageData);
-  updateInfoPanel();
 }
 
 function hasAnyTransparency(imageData) {
