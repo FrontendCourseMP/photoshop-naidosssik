@@ -24,6 +24,57 @@ const state = {
   imageData: null,
 };
 
+function replaceExtension(fileName, newExt) {
+  const dotIndex = fileName.lastIndexOf(".");
+
+  if (dotIndex === -1) {
+    return `${fileName}.${newExt}`;
+  }
+
+  return `${fileName.slice(0, dotIndex)}.${newExt}`;
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+function exportCanvasImage(type, quality = 0.92) {
+  if (!state.imageData) {
+    alert("Сначала загрузите изображение.");
+    return;
+  }
+
+  canvas.toBlob((blob) => {
+    if (!blob) {
+      alert("Не удалось сформировать файл.");
+      return;
+    }
+
+    const extension = type === "image/png" ? "png" : "jpg";
+    const fileName = replaceExtension(state.fileName || "image", extension);
+
+    downloadBlob(blob, fileName);
+  }, type, quality);
+}
+
+downloadPngBtn.addEventListener("click", () => {
+  exportCanvasImage("image/png");
+});
+
+downloadJpgBtn.addEventListener("click", () => {
+  exportCanvasImage("image/jpeg", 0.92);
+});
+
 function updateInfoPanel() {
   fileNameEl.textContent = state.fileName || "—";
   fileFormatEl.textContent = state.format || "—";
