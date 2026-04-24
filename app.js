@@ -174,6 +174,12 @@ function decodeGB7(arrayBuffer) {
   const width = (bytes[6] << 8) | bytes[7];
   const height = (bytes[8] << 8) | bytes[9];
 
+  const reserved = (bytes[10] << 8) | bytes[11];
+
+  if (reserved !== 0) {
+    throw new Error("Некорректный GB7: reserved-байты должны быть равны 0.");
+  }
+
   const pixelCount = width * height;
   const expectedLength = 12 + pixelCount;
 
