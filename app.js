@@ -48,6 +48,10 @@ function downloadBlob(blob, fileName) {
   URL.revokeObjectURL(url);
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function exportCanvasImage(type, quality = 0.92) {
   if (!state.imageData) {
     alert("Сначала загрузите изображение.");
@@ -75,6 +79,19 @@ downloadJpgBtn.addEventListener("click", () => {
   exportCanvasImage("image/jpeg", 0.92);
 });
 
+function renderImageData(imageData) {
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+
+  ctx.putImageData(imageData, 0, 0);
+
+  state.width = imageData.width;
+  state.height = imageData.height;
+  state.imageData = imageData;
+
+  updateInfoPanel();
+}
+
 function updateInfoPanel() {
   fileNameEl.textContent = state.fileName || "—";
   fileFormatEl.textContent = state.format || "—";
@@ -91,31 +108,6 @@ function updateInfoPanel() {
   } else {
     statusTextEl.textContent = "Нет загруженного изображения";
   }
-}
-
-function renderImageData(imageData) {
-  canvas.width = imageData.width;
-  canvas.height = imageData.height;
-
-  ctx.putImageData(imageData, 0, 0);
-
-  state.width = imageData.width;
-  state.height = imageData.height;
-  state.imageData = imageData;
-
-  updateInfoPanel();
-}
-
-function hasAnyTransparency(imageData) {
-  const data = imageData.data;
-
-  for (let i = 3; i < data.length; i += 4) {
-    if (data[i] !== 255) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 async function loadStandardImage(file) {
@@ -135,7 +127,21 @@ async function loadStandardImage(file) {
   state.hasMask = hasAnyTransparency(imageData);
 
   renderImageData(imageData);
+  updateInfoPanel();
 }
+
+function hasAnyTransparency(imageData) {
+  const data = imageData.data;
+
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] !== 255) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 
 function decodeGB7(arrayBuffer) {
   const bytes = new Uint8Array(arrayBuffer);
@@ -203,6 +209,70 @@ function decodeGB7(arrayBuffer) {
     hasMask,
   };
 }
+
+function encodeGB7(imageData, includeMask = false) {
+  const { width, height, data } = imageData;
+  const pixelCount = width * height;
+  const bytes = new Uint8Array(12 + pixelCount);
+
+  // Signature: G B 7 0x1D
+  bytes[0] = 0x47;
+  bytes[1] = 0x42;
+  bytes[2] = 0x37;
+  bytes[3] = 0x1d;
+
+  // Version
+  bytes[4] = 0x01;
+
+  // Flags
+  bytes[5] = includeMask ? 0x01 : 0x00;
+
+  // Width, Height (big-endian)
+  bytes[6] = (width >> 8) & 0xff;
+  bytes[7] = width & 0xff;
+  bytes[8] = (height >> 8) & 0xff;
+  bytes[9] = height & 0xff;
+
+  // Reserved
+  bytes[10] = 0x00;
+  bytes[11] = 0x00;
+
+  for (let i = 0; i < pixelCount; i++) {
+    const si = i * 4;
+    const r = data[si];
+    const g = data[si + 1];
+    const b = data[si + 2];
+    const a = data[si + 3];
+
+    // Перевод в grayscale по яркости
+    const gray8 = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+
+    // Приведение 0..255 -> 0..127
+    const gray7 = clamp(Math.round((gray8 / 255) * 127), 0, 127);
+
+    let maskBit = 0;
+    if (includeMask) {
+      maskBit = a >= 128 ? 1 : 0;
+    }
+
+    bytes[12 + i] = (maskBit << 7) | gray7;
+  }
+
+  return new Blob([bytes], { type: "application/octet-stream" });
+}
+
+downloadGb7Btn.addEventListener("click", () => {
+  if (!state.imageData) {
+    alert("Сначала загрузите изображение.");
+    return;
+  }
+
+  const includeMask = maskCheckbox.checked;
+  const blob = encodeGB7(state.imageData, includeMask);
+  const fileName = replaceExtension(state.fileName || "image", "gb7");
+
+  downloadBlob(blob, fileName);
+});
 
 async function loadGB7(file) {
   const arrayBuffer = await file.arrayBuffer();
