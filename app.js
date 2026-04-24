@@ -82,6 +82,7 @@ downloadJpgBtn.addEventListener("click", () => {
 function renderImageData(imageData) {
   canvas.width = imageData.width;
   canvas.height = imageData.height;
+  canvas.style.display = "block";
 
   ctx.putImageData(imageData, 0, 0);
 

@@ -139,7 +139,8 @@ body {
 }
 
 canvas {
-  background: white;
+  display: none;
+  background: transparent;
   box-shadow: 0 10px 30px var(--shadow);
   image-rendering: auto;
   max-width: 100%;
